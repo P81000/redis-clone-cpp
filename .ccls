@@ -1,0 +1,16 @@
+%clang
+-std=c11
+-isysroot/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+-isystem/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include
+-isystem/Users/masteguin/dev/.homebrew/Cellar/gcc/15.2.0_1/lib/gcc/current/gcc/aarch64-apple-darwin25/15/include
+-isystem/Users/masteguin/dev/.homebrew/Cellar/gcc/15.2.0_1/lib/gcc/current/gcc/aarch64-apple-darwin25/15/include-fixed
+-isystem/usr/local/include
+
+-DDEBUG
+-D_REENTRANT
+
+-I/Users/masteguin/dev/codes/abudhabi-prep/codecrafters-redis-cpp/
+-I/Users/masteguin/dev/codes/abudhabi-prep/codecrafters-redis-cpp/src
+-Wall
+-Wextra
+-Wpedantic
