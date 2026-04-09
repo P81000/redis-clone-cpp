@@ -55,8 +55,21 @@ int main(int argc, char **argv) {
   int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
   std::cout << "Client connected\n";
 
-  const char *response = "+PONG\r\n";
-  send(client_fd, response, strlen(response), 0);
+  char buffer[1024];
+  for (;;) {
+    int bytes = recv(client_fd, &buffer, sizeof(buffer), 0);
+
+    if (bytes == 0) {
+      std::cout << "Client closed connection\n";
+      break;
+    } else if (bytes < 0) {
+      std::cerr << "Network error occurred\n";
+      break;
+    }
+
+    const char response[] = "+PONG\r\n";
+    send(client_fd, response, strlen(response), 0);
+  }
 
   close(server_fd);
 
