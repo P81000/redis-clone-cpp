@@ -19,11 +19,6 @@ class RedisServer {
     int server_fd;
 
     RedisServer() = default;
-    ~RedisServer() {
-      if (server_fd >= 0) {
-        close(server_fd);
-      }
-    }
 
     std::vector<std::string> parse_resp(const std::string& input) {
       std::vector<std::string> tokens;
@@ -99,6 +94,12 @@ class RedisServer {
     }
 
   public:
+    ~RedisServer() {
+      if (server_fd >= 0) {
+        close(server_fd);
+      }
+    }
+
     static std::unique_ptr<RedisServer> create(int port) {
       auto rd_ptr = std::unique_ptr<RedisServer>(new RedisServer());
 
@@ -158,7 +159,7 @@ int main(int argc, char **argv) {
   std::cerr << std::unitbuf;
 
   auto rd = RedisServer::create(6379);
-  if (rd != nullptr) {
+  if (rd == nullptr) {
     std::cerr << "Failed to start serve\n";
     return 1;
   }
