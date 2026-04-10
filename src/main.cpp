@@ -13,6 +13,7 @@
 #include <mutex>
 
 std::mutex rw_mtx;
+std::unordered_map<std::string, std::string> db;
 
 std::vector<std::string> parse_resp(const std::string& input) {
   std::vector<std::string> tokens;
@@ -31,7 +32,6 @@ std::vector<std::string> parse_resp(const std::string& input) {
 void handle_client(int client_fd) {
   char buffer[1024];
   std::string response;
-  std::unordered_map<std::string, std::string> db;
 
   for (;;) {
     int bytes = recv(client_fd, buffer, sizeof(buffer), 0);
@@ -56,7 +56,7 @@ void handle_client(int client_fd) {
         response = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
       } else if (cmd == "SET" && tokens.size() >= 3){
         std::string_view var_name = tokens[4];
-        std::string_view var_value = tokens[5];
+        std::string_view var_value = tokens[6];
 
         {
           std::lock_guard<std::mutex> lk(rw_mtx);
