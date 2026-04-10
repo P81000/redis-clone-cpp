@@ -12,8 +12,11 @@
 #include <unordered_map>
 #include <mutex>
 
-std::mutex rw_mtx;
-std::unordered_map<std::string, std::string> db;
+
+struct ServerState {
+  std::mutex rw_mtx;
+  std::unordered_map<std::string, std::string> db;
+};
 
 std::vector<std::string> parse_resp(const std::string& input) {
   std::vector<std::string> tokens;
@@ -29,7 +32,7 @@ std::vector<std::string> parse_resp(const std::string& input) {
   return tokens;
 }
 
-void handle_client(int client_fd) {
+void handle_client(int client_fd, ServerState& state) {
   char buffer[1024];
   std::string response;
 
@@ -59,8 +62,8 @@ void handle_client(int client_fd) {
         std::string var_value = tokens[6];
 
         {
-          std::lock_guard<std::mutex> lk(rw_mtx);
-          db.emplace(var_name, var_value);
+          std::lock_guard<std::mutex> lk(state.rw_mtx);
+          state.db.emplace(var_name, var_value);
         }
 
         response = "+OK\r\n";
@@ -68,8 +71,8 @@ void handle_client(int client_fd) {
         std::string look_for = tokens[4];
 
         {
-          std::lock_guard<std::mutex> lk(rw_mtx);
-          if (auto search = db.find(look_for); search != db.end()) {
+          std::lock_guard<std::mutex> lk(state.rw_mtx);
+          if (auto search = state.db.find(look_for); search != state.db.end()) {
             std::string val = search->second;
             response = "$" + std::to_string(val.length()) + "\r\n" + val + "\r\n";
           } else {
@@ -92,6 +95,8 @@ int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
+
+  ServerState shared_state;
   
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd < 0) {
@@ -135,7 +140,7 @@ int main(int argc, char **argv) {
 
     std::cout << "New client connected..\n";
 
-    std::thread client_thread(handle_client, client_fd);
+    std::thread client_thread(handle_client, client_fd, std::ref(shared_state));
 
     client_thread.detach();
   }
