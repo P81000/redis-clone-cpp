@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <thread>
+#include <vector>
 
 std::vector<std::string> parse_resp(const std::string& input) {
   std::vector<std::string> tokens;
