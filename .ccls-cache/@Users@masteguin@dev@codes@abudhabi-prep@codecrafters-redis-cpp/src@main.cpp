@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
   std::cout << "Starting epoll event loop...\n";
 
   while (true) {
-    int num_ready = epoll_wait(epoll_fd, ev.data(), MAX_EV, -1);
+    int num_ready = epoll_wait(epoll_fd, events.data(), MAX_EV, -1);
     for (int i = 0; i < num_ready; ++i) {
       if (events[i].data.fd == server_fd) {
         struct sockaddr_in client_addr;
