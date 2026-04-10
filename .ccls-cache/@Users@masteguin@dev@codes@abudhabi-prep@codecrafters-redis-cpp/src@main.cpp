@@ -9,6 +9,10 @@
 #include <netdb.h>
 #include <thread>
 #include <vector>
+#include <unordered_map>
+#include <mutex>
+
+std::mutex rw_mtx;
 
 std::vector<std::string> parse_resp(const std::string& input) {
   std::vector<std::string> tokens;
@@ -27,6 +31,7 @@ std::vector<std::string> parse_resp(const std::string& input) {
 void handle_client(int client_fd) {
   char buffer[1024];
   std::string response;
+  std::unordered_map<std::string, std::string> db;
 
   for (;;) {
     int bytes = recv(client_fd, buffer, sizeof(buffer), 0);
@@ -49,7 +54,26 @@ void handle_client(int client_fd) {
         std::string arg = tokens[4];
 
         response = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
-      } else {
+      } else if (cmd == "SET" && tokens.size() >= 3){
+        std::string_view var_name = tokens[4];
+        std::string_view var_value = tokens[5];
+
+        {
+          std::lock_guard<std::mutex> lk(rw_mtx);
+          db.emplace(var_name, var_value);
+        }
+      } else if (cmd == "GET" && tokens.size() >= 2) {
+        std::string_view look_for = tokens[3];
+        {
+          std::lock_guard<std::mutex> lk(rw_mtx);
+          if (auto search = db.find(look_for); search != db.end()) {
+            response = search->second;
+          } else {
+            response = "$-1\r\n";
+          }
+        }
+      } 
+      else {
         response = "-ERR unknown command\r\n";
       }
     }
