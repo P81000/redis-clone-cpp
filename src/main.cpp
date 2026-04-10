@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
   struct epoll_event ev;
   ev.events = EPOLLIN;
   ev.data.fd = server_fd;
-  epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &event);
+  epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &ev);
 
   const int MAX_EV = 10;
   std::vector<struct epoll_event> events(MAX_EV);
