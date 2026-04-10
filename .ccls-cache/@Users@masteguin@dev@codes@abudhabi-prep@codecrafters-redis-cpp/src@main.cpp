@@ -7,9 +7,22 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <sys/epoll.h>
-#include <fcntl.h>
-#include <vector>
+#include <thread>
+
+void handle_client(int client_fd) {
+  char buffer[1024];
+  for (;;) {
+    int bytes = recv(client_fd, buffer, sizeof(buffer), 0);
+    if (bytes <= 0) {
+      std::cout << "Client disconnected.\n";
+      break;
+    }
+    const char response[] = "+PONG\r\n";
+    send(client_fd, response, strlen(response), 0);
+  }
+
+  close(client_fd);
+}
 
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
@@ -46,50 +59,21 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  int epoll_fd = epoll_create1(0);
-  if (epoll_fd == -1) {
-    std::cerr << "Failed to create epoll fd\n";
-    return 1;
-  }
+  for (;;) {
+    struct sockaddr_in client_addr;
+    int client_addr_len = sizeof(client_addr);
+    int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
 
-  struct epoll_event ev;
-  ev.events = EPOLLIN;
-  ev.data.fd = server_fd;
-  epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &ev);
-
-  const int MAX_EV = 10;
-  std::vector<struct epoll_event> events(MAX_EV);
-  std::cout << "Starting epoll event loop...\n";
-
-  while (true) {
-    int num_ready = epoll_wait(epoll_fd, events.data(), MAX_EV, -1);
-    for (int i = 0; i < num_ready; ++i) {
-      if (events[i].data.fd == server_fd) {
-        struct sockaddr_in client_addr;
-        int client_addr_len = sizeof(client_addr);
-        int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
-
-        struct epoll_event client_ev;
-        client_ev.events = EPOLLIN;
-        client_ev.data.fd = client_fd;
-        epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &client_ev);
-
-        std::cout << "New client added to epoll\n";
-      } else {
-        int client_fd = events[i].data.fd;
-        char buffer[1024];
-
-        int bytes = recv(client_fd, buffer, sizeof(buffer), 0);
-        if (bytes <= 0) {
-          std::cout << "Client disconnected\n";
-          epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-          close(client_fd);
-        } else {
-          const char response[] = "+PONG\r\n";
-          send(client_fd, response, strlen(response), 0);
-        }
-      }
+    if (client_fd < 0) {
+      std::cerr << "Accept failed\n";
+      continue;
     }
+
+    std::cout << "New client connected..\n";
+
+    std::thread client_thread(handle_client, client_fd);
+
+    client_thread.detach();
   }
   
   close(server_fd);
