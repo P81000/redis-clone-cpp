@@ -55,19 +55,23 @@ void handle_client(int client_fd) {
 
         response = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
       } else if (cmd == "SET" && tokens.size() >= 3){
-        std::string_view var_name = tokens[4];
-        std::string_view var_value = tokens[6];
+        std::string var_name = tokens[4];
+        std::string var_value = tokens[6];
 
         {
           std::lock_guard<std::mutex> lk(rw_mtx);
           db.emplace(var_name, var_value);
         }
+
+        response = "+OK\r\n";
       } else if (cmd == "GET" && tokens.size() >= 2) {
-        std::string_view look_for = tokens[3];
+        std::string look_for = tokens[4];
+
         {
           std::lock_guard<std::mutex> lk(rw_mtx);
           if (auto search = db.find(look_for); search != db.end()) {
-            response = search->second;
+            std::string val = search->second;
+            response = "$" + std::to_string(val.length()) + "\r\n" + val + "\r\n";
           } else {
             response = "$-1\r\n";
           }
