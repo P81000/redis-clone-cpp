@@ -53,7 +53,7 @@ void handle_client(int client_fd) {
       }
     }
 
-    send(client_fd, response, strlen(response), 0);
+    send(client_fd, response.c_str(), response.length(), 0);
   }
 
   close(client_fd);
