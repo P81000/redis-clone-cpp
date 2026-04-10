@@ -9,15 +9,50 @@
 #include <netdb.h>
 #include <thread>
 
+std::vector<std::string> parse_resp(const std::string& input) {
+  std::vector<std::string> tokens;
+  size_t start = 0;
+  size_t end = input.find("\r\n");
+
+  while (end != std::string::npos) {
+    tokens.push_back(input.substr(start, end - start));
+    start = end + 2;
+    end = input.find("\r\n", start);
+  }
+
+  return tokens;
+}
+
 void handle_client(int client_fd) {
   char buffer[1024];
+  std::string response;
+
   for (;;) {
     int bytes = recv(client_fd, buffer, sizeof(buffer), 0);
     if (bytes <= 0) {
       std::cout << "Client disconnected.\n";
       break;
     }
-    const char response[] = "+PONG\r\n";
+    
+    std::string request(buffer, bytes);
+    std::vector<std::string> tokens = parse_resp(request);
+
+    if (tokens.size() >= 3) {
+      std::string cmd = tokens[2];
+
+      for (auto& c : cmd) c = toupper(c);
+
+      if (cmd == "PING") {
+        response = "+PONG\r\n";
+      } else if (cmd == "ECHO" && tokens.size() >= 5) {
+        std::string arg = tokens[4];
+
+        response = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
+      } else {
+        response = "-ERR unknown command\r\n";
+      }
+    }
+
     send(client_fd, response, strlen(response), 0);
   }
 
