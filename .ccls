@@ -10,6 +10,9 @@
 -D_REENTRANT
 
 -I/Users/masteguin/dev/codes/abudhabi-prep/codecrafters-redis-cpp/
+-I/Users/masteguin/dev/codes/abudhabi-prep/codecrafters-redis-cpp/build
+-I/Users/masteguin/dev/codes/abudhabi-prep/codecrafters-redis-cpp/build/CMakeFiles
+-I/Users/masteguin/dev/codes/abudhabi-prep/codecrafters-redis-cpp/build/CMakeFiles/pkgRedirects
 -I/Users/masteguin/dev/codes/abudhabi-prep/codecrafters-redis-cpp/src
 -Wall
 -Wextra
