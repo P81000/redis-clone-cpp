@@ -19,8 +19,11 @@ struct CacheEntry {
 };
 
 struct ServerState {
-  std::mutex rw_mtx;
-  std::unordered_map<std::string, CacheEntry> db;
+  std::mutex mtx_var;
+  std::unordered_map<std::string, CacheEntry> db_var;
+
+  std::mutex mtx_list;
+  std::unordered_map<std::string, std::vector<std::string>> db_list;
 };
 
 std::vector<std::string> parse_resp(const std::string& input) {
@@ -51,6 +54,8 @@ void handle_client(int client_fd, ServerState& state) {
     std::string request(buffer, bytes);
     std::vector<std::string> tokens = parse_resp(request);
 
+    for (auto t : tokens) std::cout << "[ debug ] " << t << std::endl;
+
     if (tokens.size() >= 3) {
       std::string cmd = tokens[2];
 
@@ -69,9 +74,6 @@ void handle_client(int client_fd, ServerState& state) {
         CacheEntry entry;
         entry.value = var_value;
         
-//                    SET          mykey         value         PX        1000
-// arr_size cmd_size      op_size        op_size       op_size    op_size
-
         if (tokens.size() >= 11) {
           std::string op = tokens[8];
           for (auto& c : op) c = toupper(c);
@@ -88,8 +90,8 @@ void handle_client(int client_fd, ServerState& state) {
         }
 
         { // lock_guard
-          std::lock_guard<std::mutex> lk(state.rw_mtx);
-          state.db.insert_or_assign(var_name, entry);
+          std::lock_guard<std::mutex> lk(state.mtx_var);
+          state.db_var.insert_or_assign(var_name, entry);
         }
 
         response = "+OK\r\n";
@@ -97,12 +99,12 @@ void handle_client(int client_fd, ServerState& state) {
         std::string look_for = tokens[4];
 
         {
-          std::lock_guard<std::mutex> lk(state.rw_mtx);
-          auto search = state.db.find(look_for);
+          std::lock_guard<std::mutex> lk(state.mtx_var);
+          auto search = state.db_var.find(look_for);
 
-          if (search != state.db.end()) {
+          if (search != state.db_var.end()) {
             if (search->second.has_exp && std::chrono::system_clock::now() > search->second.exp_time) {
-              state.db.erase(search);
+              state.db_var.erase(search);
               response = "$-1\r\n";
             } else {
               std::string val = search->second.value;
@@ -112,7 +114,10 @@ void handle_client(int client_fd, ServerState& state) {
             response = "$-1\r\n";
           }
         }
-      } else { // default answ
+      } else if (cmd == "RPUSH" && tokens.size() >= 3) {
+        response = " ";
+      }
+      else { // default answ
         response = "-ERR unknown command\r\n";
       }
     }
