@@ -89,7 +89,7 @@ void handle_client(int client_fd, ServerState& state) {
 
         { // lock_guard
           std::lock_guard<std::mutex> lk(state.rw_mtx);
-          state.db[var_name] =  entry;
+          state.db.insert_or_assign(var_name, entry);
         }
 
         response = "+OK\r\n";
