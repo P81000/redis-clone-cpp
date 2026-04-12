@@ -54,7 +54,7 @@ void handle_client(int client_fd, ServerState& state) {
     std::string request(buffer, bytes);
     std::vector<std::string> tokens = parse_resp(request);
 
-    for (auto t : tokens) std::cout << "[ debug ] " << t << std::endl;
+//     for (auto t : tokens) std::cout << "[ debug ] " << t << std::endl;
 
     if (tokens.size() >= 3) {
       std::string cmd = tokens[2];
