@@ -141,11 +141,10 @@ void handle_client(int client_fd, ServerState& state) {
           std::lock_guard<std::mutex> lk(state.mtx_list);
 
           auto &list_ref = state.db_list[l_name];
-          auto pos = list_ref.begin();
 
           for (size_t i = 6; i < tokens.size(); i += 2) {
             std::string l_value = tokens[i];
-            list_ref.insert(pos, l_value);
+            list_ref.insert(list_ref.begin(), l_value);
           }
 
           l_size = list_ref.size();
