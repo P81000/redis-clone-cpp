@@ -160,7 +160,7 @@ void handle_client(int client_fd, ServerState& state) {
           }
         }
 
-        std::cout << "[ debug ]" << response << endl;
+        std::cout << "[ debug ]" << response << std::endl;
       }
       else { // default answ
         response = "-ERR unknown command\r\n";
