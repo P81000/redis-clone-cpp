@@ -204,11 +204,12 @@ void handle_client(int client_fd, ServerState& state) {
           std::lock_guard<std::mutex> lk(state.mtx_list);
           auto search = state.db_list.find(l_name);
           if (search == state.db_list.end() || search->second.size() == 0) { response = "$-1\r\n"; goto exit; }
+          if (items_to_pop >= (int)search->second.size()) { items_to_pop = search->second.size(); }
 
           response = "*" + std::to_string(items_to_pop) + "\r\n";
           for (int i = 0; i < items_to_pop; ++i) {
-            response += "$" + std::to_string(search->second[i].length()) + "\r\n";
-            response += search->second[i] + "\r\n";
+            response += "$" + std::to_string(search->second.front().length()) + "\r\n";
+            response += search->second.front() + "\r\n";
 
             search->second.erase(search->second.begin());
           }
