@@ -208,6 +208,8 @@ void handle_client(int client_fd, ServerState& state) {
           if (search == state.db_list.end() || search->second.size() == 0) { response = "$-1\r\n"; goto exit; }
           if (items_to_pop >= (int)search->second.size()) { items_to_pop = search->second.size(); }
 
+          response = "";
+
           if (return_arr) {
             response = "*" + std::to_string(items_to_pop) + "\r\n";
           }
