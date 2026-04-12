@@ -54,7 +54,7 @@ void handle_client(int client_fd, ServerState& state) {
     std::string request(buffer, bytes);
     std::vector<std::string> tokens = parse_resp(request);
 
-    for (auto t : tokens) std::cout << "[ debug ] " << t << std::endl;
+//     for (auto t : tokens) std::cout << "[ debug ] " << t << std::endl;
 
     if (tokens.size() >= 3) {
       std::string cmd = tokens[2];
@@ -155,12 +155,10 @@ void handle_client(int client_fd, ServerState& state) {
           response = "*" + std::to_string(range) + "\r\n";
 
           for (size_t i = start_idx; i <= end_idx; ++i) {
-            response = "$" + std::to_string(list_ref[i].length()) + "\r\n";
-            response = list_ref[i] + "\r\n";
+            response += "$" + std::to_string(list_ref[i].length()) + "\r\n";
+            response += list_ref[i] + "\r\n";
           }
         }
-
-        std::cout << "[ debug ]" << response << std::endl;
       }
       else { // default answ
         response = "-ERR unknown command\r\n";
