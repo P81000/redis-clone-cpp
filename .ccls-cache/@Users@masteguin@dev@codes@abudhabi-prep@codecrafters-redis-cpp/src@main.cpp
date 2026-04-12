@@ -133,12 +133,39 @@ void handle_client(int client_fd, ServerState& state) {
         }
 
         response = ":" + std::to_string(l_size) + "\r\n";
+      } else if (cmd == "LRANGE" && tokens.size() >= 8) {
+        // Positive indexes
+        std::string l_name = tokens[4];
+        size_t start_idx = std::stoi(tokens[6]);
+        size_t end_idx   = std::stoi(tokens[8]);
+        std::string empty_arr = "*0\r\n";
+
+        if (start_idx > end_idx) { response = empty_arr; goto exit; }
+
+        {
+          std::lock_guard<std::mutex> lk(state.mtx_list);
+          auto search = state.db_list.find(l_name);
+          if (search == state.db_list.end()) { response = empty_arr; goto exit; }
+          auto &list_ref = search->second;
+          
+          if (start_idx >= list_ref.size()) { response = empty_arr; goto exit; }
+          if (end_idx >= list_ref.size())   { end_idx = list_ref.size() - 1; }
+
+          size_t range = end_idx - start_idx + 1;
+          response = "*" + std::to_string(range) + "\r\n";
+
+          for (size_t i = start_idx; i <= end_idx; ++i) {
+            response = "$" + std::to_string(list_ref[i].length()) + "\r\n";
+            response = list_ref[i] + "\r\n";
+          }
+        }
       }
       else { // default answ
         response = "-ERR unknown command\r\n";
       }
     }
 
+exit:
     send(client_fd, response.c_str(), response.length(), 0);
   }
 
