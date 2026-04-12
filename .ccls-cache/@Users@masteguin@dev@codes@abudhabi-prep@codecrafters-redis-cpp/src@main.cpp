@@ -191,6 +191,26 @@ void handle_client(int client_fd, ServerState& state) {
 
           response = ":" + std::to_string(search->second.size()) + "\r\n";
         }
+      } else if (cmd == "LPOP" && tokens.size() >= 5) {
+        std::string l_name = tokens[4];
+        int items_to_pop = 1;
+
+        if (tokens.size() >= 7) {
+          if (std::stoi(tokens[6]) < 0) { response = "-ERR value is out of range, must be positive"; goto exit; }
+          items_to_pop = std::stoi(tokens[6]);
+        }
+
+        {
+          std::lock_guard<std::mutex> lk(state.mtx_list);
+          auto search = state.db_list.find(l_name);
+          if (search == state.db_list.end() || search->second.size() == 0) { response = "$-1\r\n"; goto exit; }
+
+          response = "*" + std::to_string(items_to_pop) + "\r\n";
+          for (int i = 0; i < items_to_pop; ++i) {
+            response += "$" + std::to_string(search->second[i].length()) + "\r\n";
+            response += search->second[i];
+          }
+        }
       }
       else { // default answ
         response = "-ERR unknown command\r\n";
