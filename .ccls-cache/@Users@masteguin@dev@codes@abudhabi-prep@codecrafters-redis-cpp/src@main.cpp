@@ -210,7 +210,7 @@ void handle_client(int client_fd, ServerState& state) {
             response += "$" + std::to_string(search->second[i].length()) + "\r\n";
             response += search->second[i] + "\r\n";
 
-            search->second.erase(search->second.front());
+            search->second.erase(search->second.begin());
           }
         }
       }
