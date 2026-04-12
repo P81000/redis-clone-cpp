@@ -67,7 +67,7 @@ void handle_client(int client_fd, ServerState& state) {
         std::string arg = tokens[4];
 
         response = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
-      } else if (cmd == "SET" && tokens.size() >= 3){
+      } else if (cmd == "SET" && tokens.size() >= 7){
         std::string var_name = tokens[4];
         std::string var_value = tokens[6];
 
@@ -95,7 +95,7 @@ void handle_client(int client_fd, ServerState& state) {
         }
 
         response = "+OK\r\n";
-      } else if (cmd == "GET" && tokens.size() >= 2) {
+      } else if (cmd == "GET" && tokens.size() >= 5) {
         std::string look_for = tokens[4];
 
         {
@@ -114,8 +114,25 @@ void handle_client(int client_fd, ServerState& state) {
             response = "$-1\r\n";
           }
         }
-      } else if (cmd == "RPUSH" && tokens.size() >= 3) {
-        response = " ";
+      } else if (cmd == "RPUSH" && tokens.size() >= 7) {
+        std::string l_name = tokens[4];
+        int l_size;
+
+        {
+          std::lock_guard<std::mutex> lk(state.mtx_list);
+
+          auto &list_ref = state.db_list[l_name];
+
+          for (size_t i = 6; i < tokens.size(); i += 2) {
+            std::string l_value = tokens[i];
+
+            list_ref.push_back(l_value);
+          }
+
+          l_size = list_ref.size();
+        }
+
+        response = ":" + std::to_string(l_size) + "\r\n";
       }
       else { // default answ
         response = "-ERR unknown command\r\n";
