@@ -133,28 +133,32 @@ void handle_client(int client_fd, ServerState& state) {
         }
 
         response = ":" + std::to_string(l_size) + "\r\n";
-      } else if (cmd == "LRANGE" && tokens.size() >= 8) {
+      } else if (cmd == "LRANGE" && tokens.size() >= 9) {
         // Positive indexes
         std::string l_name = tokens[4];
-        size_t start_idx = std::stoi(tokens[6]);
-        size_t end_idx   = std::stoi(tokens[8]);
+        int start_idx = std::stoi(tokens[6]);
+        int end_idx   = std::stoi(tokens[8]);
         std::string empty_arr = "*0\r\n";
-
-        if (start_idx > end_idx) { response = empty_arr; goto exit; }
 
         {
           std::lock_guard<std::mutex> lk(state.mtx_list);
           auto search = state.db_list.find(l_name);
           if (search == state.db_list.end()) { response = empty_arr; goto exit; }
           auto &list_ref = search->second;
+          int size = list_ref.size();
           
-          if (start_idx >= list_ref.size()) { response = empty_arr; goto exit; }
-          if (end_idx >= list_ref.size())   { end_idx = list_ref.size() - 1; }
+          if (start_idx < 0) start_idx = size + start_idx;
+          if (end_idx < 0) end_idx = size + end_idx;
 
-          size_t range = end_idx - start_idx + 1;
+          if (start_idx < 0) start_idx = 0;
+          if (end_idx >= size) end_idx = size - 1;
+
+          if (start_idx > end_idx || start_idx >= size) { response = empty_arr; goto exit; }
+
+          int range = end_idx - start_idx + 1;
           response = "*" + std::to_string(range) + "\r\n";
 
-          for (size_t i = start_idx; i <= end_idx; ++i) {
+          for (int i = start_idx; i <= end_idx; ++i) {
             response += "$" + std::to_string(list_ref[i].length()) + "\r\n";
             response += list_ref[i] + "\r\n";
           }
