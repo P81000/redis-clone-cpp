@@ -181,6 +181,16 @@ void handle_client(int client_fd, ServerState& state) {
             response += list_ref[i] + "\r\n";
           }
         }
+      } else if (cmd == "LLEN" && tokens.size() >= 5) {
+        std::string l_name = tokens[4];
+        
+        {
+          std::lock_guard<std::mutex> lk(state.mtx_list);
+          auto search = state.db_list.find(l_name);
+          if (search == state.db_list.end()) { response = ":0\r\n"; goto exit; }
+
+          response = ":" + std::to_string(search->second.size()) + "\r\n";
+        }
       }
       else { // default answ
         response = "-ERR unknown command\r\n";
