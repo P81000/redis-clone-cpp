@@ -194,8 +194,10 @@ void handle_client(int client_fd, ServerState& state) {
       } else if (cmd == "LPOP" && tokens.size() >= 5) {
         std::string l_name = tokens[4];
         int items_to_pop = 1;
+        bool return_arr = false;
 
         if (tokens.size() >= 7) {
+          return_arr = true;
           if (std::stoi(tokens[6]) < 0) { response = "-ERR value is out of range, must be positive"; goto exit; }
           items_to_pop = std::stoi(tokens[6]);
         }
@@ -206,7 +208,9 @@ void handle_client(int client_fd, ServerState& state) {
           if (search == state.db_list.end() || search->second.size() == 0) { response = "$-1\r\n"; goto exit; }
           if (items_to_pop >= (int)search->second.size()) { items_to_pop = search->second.size(); }
 
-          response = "*" + std::to_string(items_to_pop) + "\r\n";
+          if (return_arr) {
+            response = "*" + std::to_string(items_to_pop) + "\r\n";
+          }
           for (int i = 0; i < items_to_pop; ++i) {
             response += "$" + std::to_string(search->second.front().length()) + "\r\n";
             response += search->second.front() + "\r\n";
