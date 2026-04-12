@@ -133,6 +133,25 @@ void handle_client(int client_fd, ServerState& state) {
         }
 
         response = ":" + std::to_string(l_size) + "\r\n";
+      } else if (cmd == "LPUSH" && tokens.size() >= 7) {
+        std::string l_name = tokens[4];
+        int l_size;
+        
+        {
+          std::lock_guard<std::mutex> lk(state.mtx_list);
+
+          auto &list_ref = state.db_list[l_name];
+          auto pos = list_ref.begin();
+
+          for (size_t i = 6; i < tokens.size(); i += 2) {
+            std::string l_value = tokens[i];
+            list_ref.insert(pos, l_value);
+          }
+
+          l_size = list_ref.size();
+        }
+
+        response = ":" + std::to_string(l_size) + "\r\n";
       } else if (cmd == "LRANGE" && tokens.size() >= 9) {
         // Positive indexes
         std::string l_name = tokens[4];
