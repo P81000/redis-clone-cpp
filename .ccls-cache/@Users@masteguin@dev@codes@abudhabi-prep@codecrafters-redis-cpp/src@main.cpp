@@ -11,7 +11,6 @@
 #include <vector>
 #include <unordered_map>
 #include <mutex>
-#include <condition_variable>
 
 struct CacheEntry {
   std::string value;
@@ -227,25 +226,41 @@ void handle_client(int client_fd, ServerState& state) {
         }
       } else if (cmd == "BLPOP" && tokens.size() >= 7) {
         std::string l_name = tokens[4];
+        double timeout = std::stod(tokens[6]);
 
         {
           std::unique_lock<std::mutex> lk(state.mtx_list);
 
-          state.list_block.wait(lk, [&]() {
+          auto has_data = [&]() {
               auto search = state.db_list.find(l_name);
               return search != state.db_list.end() && !search->second.empty();
-          });
+          };
 
-          std::string popped_value = state.db_list[l_name].front();
-          state.db_list[l_name].erase(state.db_list[l_name].begin());
+          bool success = false;
 
-          if (state.db_list.empty()) {
-            state.db_list.erase(l_name);
+          if (timeout == 0.0) {
+            state.list_block.wait(lk, has_data());
+            success = true;
+          } else {
+            auto max_wait = std::chrono::duration<double>(timeout);
+
+            success = state.list_block.wait_for(lk, max_wait, has_data);
           }
 
-          response = "*2\r\n";
-          response += "$" + std::to_string(l_name.length()) + "\r\n" + l_name + "\r\n";
-          response += "$" + std::to_string(popped_value.length()) + "\r\n" + popped_value + "\r\n";
+          if (!success) {
+            response = "*-1\r\n";
+          } else {
+            std::string popped_value = state.db_list[l_name].front();
+            state.db_list[l_name].erase(state.db_list[l_name].begin());
+
+            if (state.db_list.empty()) {
+              state.db_list.erase(l_name);
+            }
+
+            response = "*2\r\n";
+            response += "$" + std::to_string(l_name.length()) + "\r\n" + l_name + "\r\n";
+            response += "$" + std::to_string(popped_value.length()) + "\r\n" + popped_value + "\r\n";
+          }
         }
       }
       else { // default answ
