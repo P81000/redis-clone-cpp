@@ -263,6 +263,16 @@ void handle_client(int client_fd, ServerState& state) {
             response += "$" + std::to_string(popped_value.length()) + "\r\n" + popped_value + "\r\n";
           }
         }
+      } else if (cmd == "TYPE" && tokens.size() >= 5) {
+        std::string var_name = tokens[4];
+
+        {
+          std::lock_guard<std::mutex> lk(state.mtx_var);
+          auto search = state.db_var.find(var_name);
+          if (search == state.db_var.end()) { response = "+none\r\n"; goto exit; }
+
+          response = "+string\r\n";
+        }
       }
       else { // default answ
         response = "-ERR unknown command\r\n";
