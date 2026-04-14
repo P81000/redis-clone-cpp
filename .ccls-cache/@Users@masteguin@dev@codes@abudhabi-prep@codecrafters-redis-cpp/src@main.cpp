@@ -11,6 +11,7 @@
 #include <vector>
 #include <unordered_map>
 #include <mutex>
+#include <condition_variable>
 
 struct CacheEntry {
   std::string value;
