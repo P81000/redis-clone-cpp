@@ -240,7 +240,7 @@ void handle_client(int client_fd, ServerState& state) {
           bool success = false;
 
           if (timeout == 0.0) {
-            state.list_block.wait(lk, has_data());
+            state.list_block.wait(lk, has_data);
             success = true;
           } else {
             auto max_wait = std::chrono::duration<double>(timeout);
