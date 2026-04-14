@@ -24,6 +24,7 @@ struct ServerState {
 
   std::mutex mtx_list;
   std::unordered_map<std::string, std::vector<std::string>> db_list;
+  std::condition_variable list_block;
 };
 
 std::vector<std::string> parse_resp(const std::string& input) {
@@ -130,6 +131,8 @@ void handle_client(int client_fd, ServerState& state) {
           }
 
           l_size = list_ref.size();
+
+          state.list_block.notify_all();
         }
 
         response = ":" + std::to_string(l_size) + "\r\n";
@@ -148,6 +151,7 @@ void handle_client(int client_fd, ServerState& state) {
           }
 
           l_size = list_ref.size();
+          state.list_block.notify_all();
         }
 
         response = ":" + std::to_string(l_size) + "\r\n";
@@ -219,6 +223,28 @@ void handle_client(int client_fd, ServerState& state) {
 
             search->second.erase(search->second.begin());
           }
+        }
+      } else if (cmd == "BLPOP" && tokens.size() >= 7) {
+        std::string l_name = tokens[4];
+
+        {
+          std::unique_lock<std::mutex> lk(state.mtx_list);
+
+          state.list_block.wait(lk, [&]() {
+              auto search = state.db_list.find(l_name);
+              return search != state.db_list.end() && !search->second.empty();
+          });
+
+          std::string popped_value = state.db_list[l_name].front();
+          state.db_list[l_name].erase(state.db_list[l_name].begin());
+
+          if (state.db_list.empty()) {
+            state.db_list.erase(l_name);
+          }
+
+          response = "*2\r\n";
+          response += "$" + std::to_string(l_name.length()) + "\r\n" + l_name + "\r\n";
+          response += "$" + std::to_string(popped_value.length()) + "\r\n" + popped_value + "\r\n";
         }
       }
       else { // default answ
