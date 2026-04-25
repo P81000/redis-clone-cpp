@@ -356,9 +356,10 @@ void handle_client(int client_fd, ServerState& state) {
         // 0 1  2   3     4      5        6        7      8      9 10 11    12    13 14
       } else if (cmd == "XADD" && tokens.size() >= 11){
         auto& stream_name = tokens[4];
+        std::string stream_id = tokens[6];
 
         StreamEntry stream_entry;
-        stream_entry.id = std::move(tokens[6]);
+        stream_entry.id = stream_id;
 
         for (size_t i = 8; i < tokens.size(); i += 4) {
           if (i + 2 < tokens.size()) {
@@ -383,7 +384,7 @@ void handle_client(int client_fd, ServerState& state) {
           stream_ref.push_back(std::move(stream_entry));
        }
 
-        response = "$" + std::to_string(stream_entry.id.length()) + "\r\n" + stream_entry.id + "\r\n";
+        response = "$" + std::to_string(stream_id.length()) + "\r\n" + stream_id + "\r\n";
       } else if (cmd == "TYPE" && tokens.size() >= 5) {
         std::string obj_name = tokens[4];
 
