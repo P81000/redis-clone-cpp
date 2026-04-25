@@ -12,6 +12,12 @@
 #include <unordered_map>
 #include <mutex>
 #include <condition_variable>
+#include <variant>
+
+struct StreamEntry {
+  std::string id;
+  std::unordered_map<std::string, std::string> fields;
+};
 
 struct CacheEntry {
   std::string value;
@@ -19,12 +25,14 @@ struct CacheEntry {
   bool has_exp = false;
 };
 
-struct ServerState {
-  std::mutex mtx_var;
-  std::unordered_map<std::string, CacheEntry> db_var;
+using RedisStream = std::vector<StreamEntry>;
+using RedisList = std::vector<std::string>;
+using RedisValue = std::variant<CacheEntry, RedisList, RedisStream>;
 
-  std::mutex mtx_list;
-  std::unordered_map<std::string, std::vector<std::string>> db_list;
+struct ServerState {
+  std::mutex db_mtx;
+  std::unordered_map<std::string, RedisValue> db;
+
   std::condition_variable list_block;
 };
 
@@ -92,8 +100,8 @@ void handle_client(int client_fd, ServerState& state) {
         }
 
         { // lock_guard
-          std::lock_guard<std::mutex> lk(state.mtx_var);
-          state.db_var.insert_or_assign(var_name, entry);
+          std::lock_guard<std::mutex> lk(state.db_mtx);
+          state.db.insert_or_assign(var_name, entry);
         }
 
         response = "+OK\r\n";
@@ -101,39 +109,59 @@ void handle_client(int client_fd, ServerState& state) {
         std::string look_for = tokens[4];
 
         {
-          std::lock_guard<std::mutex> lk(state.mtx_var);
-          auto search = state.db_var.find(look_for);
+          std::lock_guard<std::mutex> lk(state.db_mtx);
+          auto search = state.db.find(look_for);
 
-          if (search != state.db_var.end()) {
-            if (search->second.has_exp && std::chrono::system_clock::now() > search->second.exp_time) {
-              state.db_var.erase(search);
-              response = "$-1\r\n";
-            } else {
-              std::string val = search->second.value;
-              response = "$" + std::to_string(val.length()) + "\r\n" + val + "\r\n";
-            }
-          } else {
+          if (search == state.db.end()) { response = "$-1\r\n"; goto exit; }
+          if (not std::holds_alternative<CacheEntry>(search->second)) {
+            response = "-WRONGTYPE Operation against a key holding the wrong kind of value";
+            goto exit;
+          }
+
+          auto& entry = std::get<CacheEntry>(search->second);
+          if (entry.has_exp && std::chrono::system_clock::now() > entry.exp_time) {
+            state.db.erase(search);
             response = "$-1\r\n";
+          } else {
+            std::string val = entry.value;
+            response = "$" + std::to_string(val.length()) + "\r\n" + val + "\r\n";
           }
         }
       } else if (cmd == "RPUSH" && tokens.size() >= 7) {
         std::string l_name = tokens[4];
-        int l_size;
+        int l_size = 0;
 
         {
-          std::lock_guard<std::mutex> lk(state.mtx_list);
+          std::lock_guard<std::mutex> lk(state.db_mtx);
+          auto search = state.db.find(l_name);
 
-          auto &list_ref = state.db_list[l_name];
+          if (search == state.db.end()) {
+            state.db[l_name] = RedisList();
+            auto& list_ref = std::get<RedisList>(state.db[l_name]);
 
-          for (size_t i = 6; i < tokens.size(); i += 2) {
-            std::string l_value = tokens[i];
+            for (size_t i = 6; i < tokens.size(); i += 2) {
+              list_ref.push_back(tokens[i]);
+            }
 
-            list_ref.push_back(l_value);
+            l_size = list_ref.size();
+            state.list_block.notify_all();
           }
 
-          l_size = list_ref.size();
+          if (std::holds_alternative<RedisList>(search->second)) {
+            auto& list_ref = std::get<RedisList>(search->second);
 
-          state.list_block.notify_all();
+            for (size_t i = 6; i < tokens.size(); i += 2) {
+              list_ref.push_back(tokens[i]);
+            }
+
+            l_size = list_ref.size();
+            state.list_block.notify_all();
+
+          }
+
+          if (search != state.db.end() && not std::holds_alternative<RedisList>(search->second)) {
+            response = "-WRONGTYPE Operation against a key holding the wrong kind of value";
+          }
         }
 
         response = ":" + std::to_string(l_size) + "\r\n";
@@ -142,17 +170,36 @@ void handle_client(int client_fd, ServerState& state) {
         int l_size;
         
         {
-          std::lock_guard<std::mutex> lk(state.mtx_list);
+          std::lock_guard<std::mutex> lk(state.db_mtx);
+          auto search = state.db.find(l_name);
 
-          auto &list_ref = state.db_list[l_name];
-
-          for (size_t i = 6; i < tokens.size(); i += 2) {
-            std::string l_value = tokens[i];
-            list_ref.insert(list_ref.begin(), l_value);
+          if (search != state.db.end() && not std::holds_alternative<RedisList>(search->second)) {
+            response = "-WRONGTYPE Operation against a key holding the wrong kind of value";
+            goto exit;
           }
 
-          l_size = list_ref.size();
-          state.list_block.notify_all();
+          if (search == state.db.end()) {
+            state.db[l_name] = RedisList();
+            auto& list_ref = std::get<RedisList>(state.db[l_name]);
+
+            for (size_t i = 6; i < tokens.size(); i += 2) {
+              list_ref.insert(list_ref.begin(), tokens[i]);
+            }
+
+            l_size = list_ref.size();
+            state.list_block.notify_all();
+          }
+
+          if (std::holds_alternative<RedisList>(search->second)) {
+            auto& list_ref = std::get<RedisList>(state.db[l_name]);
+
+            for (size_t i = 6; i < tokens.size(); i += 2) {
+              list_ref.insert(list_ref.begin(), tokens[i]);
+            }
+
+            l_size = list_ref.size();
+            state.list_block.notify_all();
+          }
         }
 
         response = ":" + std::to_string(l_size) + "\r\n";
@@ -164,10 +211,17 @@ void handle_client(int client_fd, ServerState& state) {
         std::string empty_arr = "*0\r\n";
 
         {
-          std::lock_guard<std::mutex> lk(state.mtx_list);
-          auto search = state.db_list.find(l_name);
-          if (search == state.db_list.end()) { response = empty_arr; goto exit; }
-          auto &list_ref = search->second;
+          std::lock_guard<std::mutex> lk(state.db_mtx);
+          auto search = state.db.find(l_name);
+
+          if (search != state.db.end() && not std::holds_alternative<RedisList>(search->second)) {
+            response = "-WRONGTYPE Operation against a key holding the wrong kind of value";
+            goto exit;
+          }
+
+          if (search == state.db.end()) { response = empty_arr; goto exit; }
+
+          auto &list_ref = std::get<RedisList>(search->second);
           int size = list_ref.size();
           
           if (start_idx < 0) start_idx = size + start_idx;
@@ -190,11 +244,20 @@ void handle_client(int client_fd, ServerState& state) {
         std::string l_name = tokens[4];
         
         {
-          std::lock_guard<std::mutex> lk(state.mtx_list);
-          auto search = state.db_list.find(l_name);
-          if (search == state.db_list.end()) { response = ":0\r\n"; goto exit; }
+          std::lock_guard<std::mutex> lk(state.db_mtx);
+          auto search = state.db.find(l_name);
 
-          response = ":" + std::to_string(search->second.size()) + "\r\n";
+          if (search != state.db.end() && not std::holds_alternative<RedisList>(search->second)) {
+            response = "-WRONGTYPE Operation against a key holding the wrong kind of value";
+            goto exit;
+          }
+
+          if (search == state.db.end()) { response = ":0\r\n"; goto exit; }
+
+          auto &list_ref = std::get<RedisList>(search->second);
+          int size = list_ref.size();
+
+          response = ":" + std::to_string(size) + "\r\n";
         }
       } else if (cmd == "LPOP" && tokens.size() >= 5) {
         std::string l_name = tokens[4];
@@ -208,21 +271,34 @@ void handle_client(int client_fd, ServerState& state) {
         }
 
         {
-          std::lock_guard<std::mutex> lk(state.mtx_list);
-          auto search = state.db_list.find(l_name);
-          if (search == state.db_list.end() || search->second.size() == 0) { response = "$-1\r\n"; goto exit; }
-          if (items_to_pop >= (int)search->second.size()) { items_to_pop = search->second.size(); }
+          std::lock_guard<std::mutex> lk(state.db_mtx);
+
+          auto search = state.db.find(l_name);
+          if (search != state.db.end() && not std::holds_alternative<RedisList>(search->second)) {
+            response = "-WRONGTYPE Operation against a key holding the wrong kind of value";
+            goto exit;
+          }
+
+          auto& list_ref = std::get<RedisList>(search->second);
+
+          if (search == state.db.end() || list_ref.size() == 0) { response = "$-1\r\n"; goto exit; }
+          if (items_to_pop >= (int)list_ref.size()) { items_to_pop = list_ref.size(); }
 
           response = "";
 
           if (return_arr) {
             response = "*" + std::to_string(items_to_pop) + "\r\n";
           }
-          for (int i = 0; i < items_to_pop; ++i) {
-            response += "$" + std::to_string(search->second.front().length()) + "\r\n";
-            response += search->second.front() + "\r\n";
 
-            search->second.erase(search->second.begin());
+          for (int i = 0; i < items_to_pop; ++i) {
+            response += "$" + std::to_string(list_ref.front().length()) + "\r\n";
+            response += list_ref.front() + "\r\n";
+
+            list_ref.erase(list_ref.begin());
+          }
+
+          if (list_ref.empty()) {
+            state.db.erase(l_name);
           }
         }
       } else if (cmd == "BLPOP" && tokens.size() >= 7) {
@@ -230,11 +306,18 @@ void handle_client(int client_fd, ServerState& state) {
         double timeout = std::stod(tokens[6]);
 
         {
-          std::unique_lock<std::mutex> lk(state.mtx_list);
+          std::unique_lock<std::mutex> lk(state.db_mtx);
+
+          auto search = state.db.find(l_name);
+          auto& list_ref = std::get<RedisList>(search->second);
+
+          if (search != state.db.end() && not std::holds_alternative<RedisList>(search->second)) {
+            response = "-WRONGTYPE Operation against a key holding the wrong kind of value";
+            goto exit;
+          }
 
           auto has_data = [&]() {
-              auto search = state.db_list.find(l_name);
-              return search != state.db_list.end() && !search->second.empty();
+              return search != state.db.end() && !list_ref.empty();
           };
 
           bool success = false;
@@ -244,18 +327,17 @@ void handle_client(int client_fd, ServerState& state) {
             success = true;
           } else {
             auto max_wait = std::chrono::duration<double>(timeout);
-
             success = state.list_block.wait_for(lk, max_wait, has_data);
           }
 
           if (!success) {
             response = "*-1\r\n";
           } else {
-            std::string popped_value = state.db_list[l_name].front();
-            state.db_list[l_name].erase(state.db_list[l_name].begin());
+            std::string popped_value = list_ref.front();
+            list_ref.erase(list_ref.begin());
 
-            if (state.db_list.empty()) {
-              state.db_list.erase(l_name);
+            if (list_ref.empty()) {
+              state.db.erase(l_name);
             }
 
             response = "*2\r\n";
@@ -264,17 +346,18 @@ void handle_client(int client_fd, ServerState& state) {
           }
         }
       } else if (cmd == "TYPE" && tokens.size() >= 5) {
-        std::string var_name = tokens[4];
+        std::string obj_name = tokens[4];
 
         {
-          std::lock_guard<std::mutex> lk(state.mtx_var);
-          auto search = state.db_var.find(var_name);
-          if (search == state.db_var.end()) { response = "+none\r\n"; goto exit; }
+          std::lock_guard<std::mutex> lk(state.db_mtx);
+          auto search = state.db.find(obj_name);
+          if (search == state.db.end()) { response = "+none\r\n"; goto exit; }
 
-          response = "+string\r\n";
+          if (std::holds_alternative<RedisList>(search->second)) { response = "+list\r\n"; goto exit; }
+          if (std::holds_alternative<RedisStream>(search->second)) { response = "+stream\r\n"; goto exit; }
+          if (std::holds_alternative<CacheEntry>(search->second)) { response = "+string\r\n"; goto exit; }
         }
-      }
-      else { // default answ
+      } else { // default answ
         response = "-ERR unknown command\r\n";
       }
     }
