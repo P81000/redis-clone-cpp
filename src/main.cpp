@@ -307,9 +307,9 @@ void handle_client(int client_fd, ServerState& state) {
 
         {
           std::unique_lock<std::mutex> lk(state.db_mtx);
+          decltype(state.db.end()) search;
 
-          auto search = state.db.find(l_name);
-          auto& list_ref = std::get<RedisList>(search->second);
+          search = state.db.find(l_name);
 
           if (search != state.db.end() && not std::holds_alternative<RedisList>(search->second)) {
             response = "-WRONGTYPE Operation against a key holding the wrong kind of value";
@@ -317,7 +317,12 @@ void handle_client(int client_fd, ServerState& state) {
           }
 
           auto has_data = [&]() {
-              return search != state.db.end() && !list_ref.empty();
+            search = state.db.find(l_name);
+            if (search == state.db.end()) return false;
+            if (not std::holds_alternative<RedisList>(search->second)) return false;
+
+            auto& list_ref = std::get<RedisList>(search->second);
+            return !list_ref.empty();
           };
 
           bool success = false;
@@ -333,11 +338,12 @@ void handle_client(int client_fd, ServerState& state) {
           if (!success) {
             response = "*-1\r\n";
           } else {
+            auto& list_ref = std::get<RedisList>(search->second);
             std::string popped_value = list_ref.front();
             list_ref.erase(list_ref.begin());
 
             if (list_ref.empty()) {
-              state.db.erase(l_name);
+              state.db.erase(search);
             }
 
             response = "*2\r\n";
