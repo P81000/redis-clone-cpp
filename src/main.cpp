@@ -15,6 +15,14 @@
 #include <variant>
 #include <deque>
 
+struct StringHash {
+  using is_transparent = void;
+  
+  std::size_t operator()(std::string_view sv) const {
+    return std::hash<std::string_view>{}(sv);
+  }
+};
+
 struct StreamEntry {
   std::string id;
   std::unordered_map<std::string, std::string> fields;
@@ -32,7 +40,7 @@ using RedisValue = std::variant<CacheEntry, RedisList, RedisStream>;
 
 struct ServerState {
   std::mutex db_mtx;
-  std::unordered_map<std::string, RedisValue> db;
+  std::unordered_map<std::string, RedisValue, StringHash, std::equal_to<>> db;
 
   std::condition_variable list_block;
 };
@@ -160,7 +168,7 @@ void handle_client(int client_fd, ServerState& state) {
           }
 
           l_size = list_ref.size();
-          state.list_block.notify_all();
+          state.list_block.notify_one();
         }
 
         response = ":" + std::to_string(l_size) + "\r\n";
@@ -185,7 +193,7 @@ void handle_client(int client_fd, ServerState& state) {
           }
 
           l_size = list_ref.size();
-          state.list_block.notify_all();
+          state.list_block.notify_one();
         }
 
         response = ":" + std::to_string(l_size) + "\r\n";
