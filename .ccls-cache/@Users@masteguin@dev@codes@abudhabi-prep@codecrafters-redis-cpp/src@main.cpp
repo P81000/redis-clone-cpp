@@ -37,7 +37,7 @@ struct ServerState {
   std::condition_variable list_block;
 };
 
-std::vector<std::string_view> parse_resp(const std::string& input) {
+std::vector<std::string_view> parse_resp(std::string_view input) {
   std::vector<std::string_view> tokens;
   size_t start = 0;
   size_t end = input.find("\r\n");
@@ -66,7 +66,7 @@ void handle_client(int client_fd, ServerState& state) {
       break;
     }
     
-    std::string request(buffer, bytes);
+    std::string_view request(buffer, bytes);
     std::vector<std::string_view> tokens = parse_resp(request);
 
 //     for (auto t : tokens) std::cout << "[ debug ] " << t << std::endl;
@@ -109,7 +109,7 @@ void handle_client(int client_fd, ServerState& state) {
 
         { // lock_guard
           std::lock_guard<std::mutex> lk(state.db_mtx);
-          state.db.insert_or_assign(var_name, entry);
+          state.db.insert_or_assign(var_name, std::move(entry));
         }
 
         response.append("+OK\r\n");
@@ -338,7 +338,7 @@ void handle_client(int client_fd, ServerState& state) {
             response.append("*-1\r\n");
           } else {
             auto& list_ref = std::get<RedisList>(search->second);
-            auto& popped_value = list_ref.front();
+            std::string popped_value = std::move(list_ref.front());
             list_ref.pop_front();
 
             if (list_ref.empty()) {
