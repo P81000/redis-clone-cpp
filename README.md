@@ -1,33 +1,44 @@
-[![progress-banner](https://backend.codecrafters.io/progress/redis/9a66e43d-6f1b-437d-9e75-79db1b181877)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
 
-This is a starting point for C++ solutions to the
-["Build Your Own Redis" Challenge](https://codecrafters.io/challenges/redis).
+# Redis Clone (C++)
 
-In this challenge, you'll build a toy Redis clone that's capable of handling
-basic commands like `PING`, `SET` and `GET`. Along the way we'll learn about
-event loops, the Redis protocol and more.
+High-performance in-memory key-value store inspired by Redis, built in C++.
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+This project implements a lightweight Redis-like server capable of handling basic commands such as `PING`, `SET`, and `GET`, using low-level socket programming and an event-driven architecture.
 
-# Passing the first stage
+It focuses on core systems programming concepts such as:
+- Event loops
+- TCP socket communication
+- Command parsing
+- In-memory data storage
+- Low-latency request handling
 
-The entry point for your Redis implementation is in `src/main.cpp`. Study and
-uncomment the relevant code, and push your changes to pass the first stage:
+Built as part of a systems programming challenge, but extended with a focus on performance and architectural understanding.
 
-```sh
-git commit -am "pass 1st stage" # any msg
-git push origin master
-```
+---
 
-That's all!
+## Features
 
-# Stage 2 & beyond
+- Custom TCP server in C++
+- RESP-like protocol parsing
+- In-memory key-value store
+- Basic command execution (`PING`, `SET`, `GET`)
+- Event-driven architecture
 
-Note: This section is for stages 2 and beyond.
+---
 
-1. Ensure you have `cmake` installed locally
-1. Run `./your_program.sh` to run your Redis server, which is implemented in
-   `src/main.cpp`.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
+## Design Focus
+
+This implementation emphasizes:
+- Low-level systems design
+- Minimal latency request handling
+- Efficient memory usage
+- Scalable architecture patterns
+
+---
+
+## Build & Run
+
+```bash
+cmake .
+make
+./your_program.sh
